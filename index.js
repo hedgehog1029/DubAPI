@@ -6,7 +6,8 @@ var util = require('util'),
 
 var RoomModel = require('./lib/models/roomModel.js'),
     SelfModel = require('./lib/models/selfModel.js'),
-    UserModel = require('./lib/models/userModel.js');
+    UserModel = require('./lib/models/userModel.js'),
+    ConversationModel = require('./lib/models/conversationModel.js');
 
 var RequestHandler = require('./lib/requestHandler.js'),
     ActionHandler = require('./lib/actionHandler.js'),
@@ -43,6 +44,7 @@ function DubAPI(auth, callback) {
     this._.slug = undefined;
     this._.self = undefined;
     this._.room = undefined;
+    this._.cachedPM = {};
 
     this.mutedTriggerEvents = false;
     this.maxChatMessageSplits = 1;
@@ -133,6 +135,16 @@ DubAPI.prototype.connect = function(slug) {
             });
         });
     });
+
+    that._.reqHandler.queue({method: 'GET', url: endpoints.message}, function(code, body) {
+        body.data.forEach(function(conv) {
+            var user = conv.usersid.find(function(u) {
+                return u._id != that._.self.id;
+            });
+
+            that._.cachedPM[user._id] = new ConversationModel(conv, that);
+        });
+    });
 };
 
 DubAPI.prototype.disconnect = function() {
@@ -199,6 +211,20 @@ DubAPI.prototype.sendChat = function(message, callback) {
         if (i >= this.maxChatMessageSplits) break;
     }
 };
+
+DubAPI.prototype.openPM = function(uid, callback) {
+    if (typeof uid !== 'string') throw new TypeError('uid must be a string');
+    if (typeof callback !== 'function') throw new TypeError('callback must be a function');
+
+    var that = this;
+    if (!this._.cachedPM[uid]) {
+        this._.reqHandler.queue({method: 'POST', url: endpoints.message, form: { "usersid[]": uid }}, function(s, body) {
+            that._.cachedPM[uid] = new ConversationModel(body.data, that);
+        });
+    }
+
+    callback(this._.cachedPM[uid]);
+}
 
 DubAPI.prototype.getChatHistory = function() {
     if (!this._.connected) return [];
