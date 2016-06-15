@@ -220,10 +220,12 @@ DubAPI.prototype.openPM = function(uid, callback) {
     if (!this._.cachedPM[uid]) {
         this._.reqHandler.queue({method: 'POST', url: endpoints.message, form: { "usersid[]": uid }}, function(s, body) {
             that._.cachedPM[uid] = new ConversationModel(body.data, that);
-        });
-    }
 
-    callback(this._.cachedPM[uid]);
+            callback(that._.cachedPM[uid]);
+        });
+    } else {
+        callback(this._.cachedPM[uid]);
+    }
 }
 
 DubAPI.prototype.getChatHistory = function() {
